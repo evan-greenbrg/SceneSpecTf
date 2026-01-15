@@ -2,6 +2,7 @@ import math
 import os
 from datetime import datetime
 
+import click
 import numpy as np
 import torch
 from torch import nn
@@ -64,7 +65,7 @@ class Trainer:
         torch.sort(prior_head_0)
 
         # Curious if the distribution of the values matters.
-        prior_head_1 = self.gamma_dist.sample((x.shape[0], 1, 40)).to(device)
+        prior_head_1 = self.gamma_dist.sample((x.shape[0], 1, 40)).to(self.device)
         # prior_head_1 = torch.abs(torch.randn(
         #     x.shape[0], 
         #     1, 40,
@@ -117,7 +118,7 @@ class Trainer:
         ), encoder, opt_encoder, disc, opt_disc
 
 
-def evaluation(_dataloader, encoder):
+def evaluation(_dataloader, encoder, device):
     train_true_x = []
     train_pred_x = []
     train_true_y = []
@@ -149,57 +150,65 @@ def evaluation(_dataloader, encoder):
 
     return train_r2_x, train_r2_y, train_mape_x, train_mape_y
 
-
+@click.command()
+@click.argument('train_rdn_path')
+@click.argument('train_atm_path')
+@click.argument('test_rdn_path')
+@click.argument('test_atm_path')
+@click.argument('outdir')
+@click.option('--nchunks', default=32)
+@click.option('--chunksize', default=512)
+@click.option('--arch_nbands', default=285)
+@click.option('--arch_heads', default=2)
+@click.option('--arch_dim_output', default=40)
+@click.option('--arch_num_blocks', default=2)
+@click.option('--lr', default=1e-6)
+@click.option('--gpu', is_flag=True, default=False)
+@click.option('--batch', default=32)
+@click.option('--epochs', default=50)
+@click.option('--seed', default=42)
+@click.option('--wandb_name', default='')
+@click.option('--wandb_entity', default='')
+@click.option('--wandb_project', default='')
+@click.option('--save_every_epoch', is_flag=True, default=False)
 def train(
-    inp_path: str,
+    train_rdn_path: str,
+    train_atm_path: str,
+    test_rdn_path: str,
+    test_atm_path: str,
     outdir: str,
-    nchunks: int = 50,
+    nchunks: int = 32,
     chunksize: int = 512,
     arch_nbands: int = 285,
     arch_heads: int = 2,
     arch_rows_input: int = 512,
     arch_cols_input: int = 512,
     arch_dim_output: int = 40,
-    arch_num_blocks: int = 3,
-    lr: tuple = (1e-6, 1e-8),
+    arch_num_blocks: int = 2,
+    lr: float = 1e-6,
     gpu: int = 0,
     batch: int = 32,
-    epochs: int = 40,
+    epochs: int = 50,
     seed: int = 42,
     wandb_name: str = '',
     wandb_entity: str = '',
     wandb_project: str = '',
-    save_every_epoch: bool = true,
+    save_every_epoch: bool = False,
 ):
-    nchunks: int = 10
-    chunksize: int = 512 
-    arch_nbands: int = 285
-    arch_heads: int = 2
-    arch_rows_input: int = 512
-    arch_cols_input: int = 512 
-    arch_dim_output: int = 40
-    arch_num_blocks: int = 2
-    lr: tuple = (1e-6, 1e-8)
-    gpu: int = 0
-    batch: int = 10
-    epochs: int = 100
-    seed: int = 42
-    wandb_name: str = 'Test'
-    wandb_entity: str = 'ev-ben-green-uc-santa-barbara'
-    wandb_project: str = 'ScenePresolve'
-
     useed(seed)
-
     device = get_device(0)
-    scene_root = '/Users/bgreenbe/Projects/PresolveScrape/Scene/emit20220818t205752'
-    rdn_path = os.path.join(scene_root, 'emit20220818t205752_o23014_s000_l1b_rdn_b0106_v01.img')
-    atm_path = os.path.join(scene_root, 'emit20220818t205752_o23014_s000_l2a_atm_b0106_v01.img')
 
-    rdn_paths = [rdn_path]
-    atm_paths = [atm_path]
-    # Split FIDs into test and train
-    train_rdn_paths = test_rdn_paths = rdn_paths
-    train_atm_paths = test_atm_paths = atm_paths
+    with open(train_rdn_path, 'r') as f:
+        train_rdn_paths = [line.strip() for line in f.readlines()]
+
+    with open(train_atm_path, 'r') as f:
+        train_atm_paths = [line.strip() for line in f.readlines()]
+
+    with open(test_rdn_path, 'r') as f:
+        test_rdn_paths = [line.strip() for line in f.readlines()]
+
+    with open(test_atm_path, 'r') as f:
+        test_atm_paths = [line.strip() for line in f.readlines()]
 
     train_dataset = ImageDataset(
         train_rdn_paths,
@@ -241,8 +250,7 @@ def train(
                 'epochs': epochs,
                 'batch': batch,
                 'arch_nbands': arch_nbands,
-                'arch_rows_input': arch_rows_input,
-                'arch_cols_input': arch_cols_input,
+                'chunksize': chunksize,
                 'arch_dim_output': arch_dim_output,
                 'arch_heads': arch_heads,
                 'arch_num_blocks': arch_num_blocks,
@@ -252,21 +260,21 @@ def train(
     except Exception as e:
         print("WandB error!")
         print(e)
-        # sys.exit(1)
+        sys.exit(1)
 
     encoder = ConvEncoder(
         nbands=285,
-        rows_input=512,
-        cols_input=512,
-        dim_output=40,
-        nblocks=2,
-        heads=2
+        rows_input=chunksize,
+        cols_input=chunksize,
+        dim_output=arch_dim_output,
+        nblocks=arch_num_blocks,
+        heads=arch_heads
     ).to(device)
-    disc = Discriminator(40, heads=2).to(device)
+    disc = Discriminator(arch_dim_output, heads=arch_heads).to(device)
     trainer = Trainer(lambda_adv=0.2, lambda_lat=0.8)
 
-    opt_enc = torch.optim.Adam(encoder.parameters(), lr=1e-6)
-    opt_disc = torch.optim.Adam(disc.parameters(), lr=1e-6)
+    opt_enc = torch.optim.Adam(encoder.parameters(), lr=lr)
+    opt_disc = torch.optim.Adam(disc.parameters(), lr=lr)
 
     for epoch in range(epochs):
         encoder.train()
@@ -311,7 +319,7 @@ def train(
             train_r2_y,
             train_mape_x,
             train_mape_y
-        ) = evaluation(train_dataloader, encoder)
+        ) = evaluation(train_dataloader, encoder, device)
 
         # testing eval
         (
@@ -319,7 +327,7 @@ def train(
             test_r2_y,
             test_mape_x,
             test_mape_y
-        ) = evaluation(test_dataloader, encoder)
+        ) = evaluation(test_dataloader, encoder, device)
 
         run.log({
             "train/loss_disc": train_epoch_loss_disc,
@@ -329,95 +337,34 @@ def train(
             "train/r2_dens": train_r2_y,
             "train/mape_val": train_mape_x,
             "train/mape_dens": train_mape_y,
-            "test/r2_val": train_r2_x,
-            "test/r2_dens": train_r2_y,
-            "test/mape_val": train_mape_x,
-            "test/mape_dens": train_mape_y,
-            # "test/loss": test_epoch_loss,
+            "test/r2_val": test_r2_x,
+            "test/r2_dens": test_r2_y,
+            "test/mape_val": test_mape_x,
+            "test/mape_dens": test_mape_y,
             "epoch": epoch,
         })
+
+        if save_every_epoch:
+            os.makedirs(os.path.join(outdir, 'epochs', exist_ok=True)
+            torch.save(
+                encoder.state_dict(), 
+                os.path.join(
+                    outdir, 
+                    'epochs',
+                    f"scene_presolve_encoder_{timestamp}_{epoch}.pt"
+                )
+            )
+
+        torch.save(
+            encoder.state_dict(), 
+            os.path.join(outdir, f"scene_presolve_encoder_{timestamp}.pt")
+        )
+        torch.save(
+            disc.state_dict(), 
+            os.path.join(outdir, f"scene_presolve_discriminator_{timestamp}.pt")
+        )
     run.finish()
 
-#         if save_every_epoch:
-#             torch.save(model.state_dict(), os.path.join(outdir, f"presolve_{timestamp}_{epoch}.pt"))
-#     if not save_every_epoch:
-#         torch.save(
-#             model.state_dict(), 
-#             os.path.join(outdir, f"spectf_presolve_{timestamp}.pt")
-#         )
-#     run.finish()
 
-
-
-data = train_dataset[9]
-test = torch.Tensor(data['images'][None, ...]).to(device)
-pred = encoder(test).detach().cpu().numpy()
-
-plt.plot(data['latent'][0], data['latent'][1])
-plt.scatter(data['latent'][0], data['latent'][1])
-plt.scatter(pred[0, 0, :], pred[0, 1, :])
-plt.show()
-
-
-dataset = ImageDataset(
-    [rdn_path],
-    [atm_path],
-    nchunks=5,
-    chunksize=512,
-    nbins=40
-)
-encoder = ConvEncoder(
-    nbands=285,
-    rows_input=512,
-    cols_input=512,
-    dim_output=40,
-    nblocks=2,
-    heads=2
-).to(device)
-disc = Discriminator(40, heads=2).to(device)
-trainer = Trainer(lambda_adv=0.3, lambda_lat=0.7)
-
-opt_enc = torch.optim.Adam(encoder.parameters(), lr=1e-6)
-opt_disc = torch.optim.Adam(disc.parameters(), lr=1e-8)
-
-encoder.train()
-# opt_enc.train()
-disc.train()
-# opt_disc.train()
-
-x = torch.Tensor(batch_['images']).to(device)
-latent_target = torch.Tensor(batch_['latent']).to(device)
-
-discs = []
-lats = []
-encs = []
-
-steps = 100
-for i in range(steps):
-    print(i)
-    loss, encoder, opt_enc, disc, opt_disc = trainer.step(
-        x, latent_target, encoder, opt_enc, disc, opt_disc
-    )
-    loss_disc, loss_latent, loss_encoding = loss
-
-    encs.append(loss_encoding)
-    lats.append(loss_latent)
-    discs.append(loss_disc)
-
-xs = [i for i in range(steps)]
-fig, axs = plt.subplots(3, 1, sharex=True)
-axs[0].scatter(xs, encs)
-axs[1].scatter(xs, lats)
-axs[2].scatter(xs, discs)
-plt.show()
-
-x = torch.Tensor(batch_['images']).to(device)
-latent_target = torch.Tensor(batch_['latent']).to(device)
-pred = encoder(rdn).cpu().detach().numpy()
-latent = latent_target.cpu().detach().numpy()
-
-i = 0
-plt.plot(latent[i, 0, :], latent[i, 1, :])
-plt.scatter(latent[i, 0, :], latent[i, 1, :])
-plt.scatter(pred[i, 0, :], pred[i, 1, :])
-plt.show()
+if __name__ == '__main__':
+    train()
