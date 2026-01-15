@@ -32,7 +32,9 @@ class ImageDataset(Dataset):
             self.row_cols.append([row, col])
 
     @staticmethod
-    def calc_histogram(data, nbins):
+    def calc_histogram(data, nbins, nodata=-9999.):
+        data = data[~np.isnan(data)]
+        data = data[data != nodata]
         hist_vals, hist_edges = np.histogram(data, bins=nbins, density=True)
         hist_centers = np.maximum(hist_edges[:-1] + np.diff(hist_edges) / 2, 0)
 

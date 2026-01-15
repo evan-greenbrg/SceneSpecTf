@@ -345,7 +345,7 @@ def train(
         })
 
         if save_every_epoch:
-            os.makedirs(os.path.join(outdir, 'epochs', exist_ok=True)
+            os.makedirs(os.path.join(outdir, 'epochs', exist_ok=True))
             torch.save(
                 encoder.state_dict(), 
                 os.path.join(
