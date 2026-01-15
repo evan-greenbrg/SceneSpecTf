@@ -24,6 +24,13 @@ class ImageDataset(Dataset):
             self.sp_paths += [sp_path for i in range(nchunks)]
             self.atm_paths += [atm_path for i in range(nchunks)]
 
+        self.row_cols = []
+        for atm_path in self.atm_paths:
+            atm = envi.open(envi_header(atm_path))
+            row = np.random.randint(atm.shape[0] - self.chunksize)
+            col = np.random.randint(atm.shape[1] - self.chunksize)
+            self.row_cols.append([row, col])
+
     @staticmethod
     def calc_histogram(data, nbins):
         hist_vals, hist_edges = np.histogram(data, bins=nbins, density=True)
@@ -48,6 +55,8 @@ class ImageDataset(Dataset):
 
         row = np.random.randint(atm.shape[0] - self.chunksize)
         col = np.random.randint(atm.shape[1] - self.chunksize)
+        row, col = self.row_cols[idx]
+
         sample = atm[row:row+self.chunksize, col:col+self.chunksize, atm_idx]
         latent = np.moveaxis(
             self.calc_histogram(sample, self.nbins),

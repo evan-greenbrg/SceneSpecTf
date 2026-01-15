@@ -55,11 +55,13 @@ class Trainer:
         # Set prior of head 2: 0 -> 1
         # Hard code the latent set up
         # Uniform dist for the h2o vals
-        prior_head_0 = torch.rand(
+        prior_head_0, _ = torch.sort(torch.rand(
             x.shape[0],
             1, 40,
             device=self.device
-        ) * self.latent_scale
+        ) * self.latent_scale)
+
+        torch.sort(prior_head_0)
 
         # Curious if the distribution of the values matters.
         prior_head_1 = self.gamma_dist.sample((x.shape[0], 1, 40)).to(device)
@@ -77,10 +79,11 @@ class Trainer:
 
         # Update Discriminator
         logits_prior = disc(latent_prior)
+        # logits_prior = disc(latent_target)
         logits_pred = disc(latent_pred)  
 
         loss_disc = (
-            self.bce(logits_prior, torch.zeros_like(logits_prior)) 
+            self.bce(logits_prior, torch.ones_like(logits_prior)) 
             + self.bce(logits_pred, torch.zeros_like(logits_pred))
         ) / 2
 
@@ -98,8 +101,8 @@ class Trainer:
         )
         loss_lat = self.mse(latent_pred, latent_target)
         loss_enc = (
-            self.lambda_adv * loss_adv_enc 
-            + self.lambda_lat * loss_lat
+            (self.lambda_adv * loss_adv_enc)
+            + (self.lambda_lat * loss_lat)
         )
 
         opt_encoder.zero_grad()
@@ -112,7 +115,6 @@ class Trainer:
             loss_lat.item(),
             loss_adv_enc.item()
         ), encoder, opt_encoder, disc, opt_disc
-
 
 
 def evaluation(_dataloader, encoder):
@@ -162,14 +164,14 @@ def train(
     lr: tuple = (1e-6, 1e-8),
     gpu: int = 0,
     batch: int = 32,
-    epochs: int = 20,
+    epochs: int = 40,
     seed: int = 42,
     wandb_name: str = '',
     wandb_entity: str = '',
     wandb_project: str = '',
     save_every_epoch: bool = true,
 ):
-    nchunks: int = 50
+    nchunks: int = 10
     chunksize: int = 512 
     arch_nbands: int = 285
     arch_heads: int = 2
@@ -179,8 +181,8 @@ def train(
     arch_num_blocks: int = 2
     lr: tuple = (1e-6, 1e-8)
     gpu: int = 0
-    batch: int = 5
-    epochs: int = 20
+    batch: int = 10
+    epochs: int = 100
     seed: int = 42
     wandb_name: str = 'Test'
     wandb_entity: str = 'ev-ben-green-uc-santa-barbara'
@@ -261,10 +263,10 @@ def train(
         heads=2
     ).to(device)
     disc = Discriminator(40, heads=2).to(device)
-    trainer = Trainer(lambda_adv=0.5, lambda_lat=.5)
+    trainer = Trainer(lambda_adv=0.2, lambda_lat=0.8)
 
     opt_enc = torch.optim.Adam(encoder.parameters(), lr=1e-6)
-    opt_disc = torch.optim.Adam(disc.parameters(), lr=1e-8)
+    opt_disc = torch.optim.Adam(disc.parameters(), lr=1e-6)
 
     for epoch in range(epochs):
         encoder.train()
@@ -276,6 +278,7 @@ def train(
         train_epoch_loss_latent = 0
         train_epoch_loss_encoding = 0
         for ite, batch_ in enumerate(train_dataloader):
+            print(ite)
             rdn = batch_['images'].to(device)
             latent = batch_['latent'].to(device)
 
@@ -335,18 +338,18 @@ def train(
         })
     run.finish()
 
-        if save_every_epoch:
-            torch.save(model.state_dict(), os.path.join(outdir, f"presolve_{timestamp}_{epoch}.pt"))
-    if not save_every_epoch:
-        torch.save(
-            model.state_dict(), 
-            os.path.join(outdir, f"spectf_presolve_{timestamp}.pt")
-        )
-    run.finish()
+#         if save_every_epoch:
+#             torch.save(model.state_dict(), os.path.join(outdir, f"presolve_{timestamp}_{epoch}.pt"))
+#     if not save_every_epoch:
+#         torch.save(
+#             model.state_dict(), 
+#             os.path.join(outdir, f"spectf_presolve_{timestamp}.pt")
+#         )
+#     run.finish()
 
 
 
-data = train_dataset[10]
+data = train_dataset[9]
 test = torch.Tensor(data['images'][None, ...]).to(device)
 pred = encoder(test).detach().cpu().numpy()
 
@@ -372,7 +375,7 @@ encoder = ConvEncoder(
     heads=2
 ).to(device)
 disc = Discriminator(40, heads=2).to(device)
-trainer = Trainer(lambda_adv=0.2, lambda_lat=.8)
+trainer = Trainer(lambda_adv=0.3, lambda_lat=0.7)
 
 opt_enc = torch.optim.Adam(encoder.parameters(), lr=1e-6)
 opt_disc = torch.optim.Adam(disc.parameters(), lr=1e-8)
@@ -389,11 +392,11 @@ discs = []
 lats = []
 encs = []
 
-steps = 200
+steps = 100
 for i in range(steps):
     print(i)
     loss, encoder, opt_enc, disc, opt_disc = trainer.step(
-        x, latent, encoder, opt_enc, disc, opt_disc
+        x, latent_target, encoder, opt_enc, disc, opt_disc
     )
     loss_disc, loss_latent, loss_encoding = loss
 
