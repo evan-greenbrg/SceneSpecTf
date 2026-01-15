@@ -1,0 +1,17 @@
+Metadata-Version: 2.4
+Name: presolve
+Version: 0.1.2
+Requires-Python: <3.13,>=3.9
+Requires-Dist: torch>=2.5.1
+Requires-Dist: numpy>=1.20.0
+Requires-Dist: tqdm>=4.67.1
+Requires-Dist: scikit-learn>=1.6.1
+Requires-Dist: h5py>=3.12.1
+Requires-Dist: schedulefree>=1.4
+Requires-Dist: wandb>=0.19.3
+Requires-Dist: rich-click>=1.8.5
+Requires-Dist: rich>=13.9.4
+Requires-Dist: trogon>=0.6.0
+Requires-Dist: spectral>=0.23.1
+Requires-Dist: isofit>=3.2.2
+Requires-Dist: xgboost>=2.1.3
