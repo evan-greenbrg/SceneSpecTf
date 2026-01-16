@@ -33,7 +33,13 @@ class ImageDataset(Dataset):
             ]
             atm_im = atm.open_memmap(interleave='bip')
             sampled = False
+            iters = 0
             while not sampled:
+                if iters == 10:
+                    print("Maximum sampling for file")
+                    sampled = True
+                iters += 1
+
                 row = np.random.randint(atm.shape[0] - self.chunksize)
                 col = np.random.randint(atm.shape[1] - self.chunksize)
                 if np.any(np.isnan(
@@ -49,7 +55,8 @@ class ImageDataset(Dataset):
 
                 sampled = True
 
-            self.row_cols.append([row, col])
+            if iters < 10:
+                self.row_cols.append([row, col])
 
     @staticmethod
     def calc_histogram(data, nbins, nodata=-9999.):
