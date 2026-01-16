@@ -27,8 +27,28 @@ class ImageDataset(Dataset):
         self.row_cols = []
         for atm_path in self.atm_paths:
             atm = envi.open(envi_header(atm_path))
-            row = np.random.randint(atm.shape[0] - self.chunksize)
-            col = np.random.randint(atm.shape[1] - self.chunksize)
+            h2o_idx = [
+                i for i, n in enumerate(atm.metadata['band names']) 
+                if n == 'H2O (g cm-2)'
+            ]
+            atm_im = atm.open_memmap(interleave='bip')
+            sampled = False
+            while not sampled:
+                row = np.random.randint(atm.shape[0] - self.chunksize)
+                col = np.random.randint(atm.shape[1] - self.chunksize)
+                if np.any(np.isnan(
+                    atm[row:row+chunksize, col:col+chunksize, h2o_idx]
+                )):
+                    continue
+
+                if np.any(
+                    atm[row:row+chunksize, col:col+chunksize, h2o_idx]
+                    == -9999.
+                ):
+                    continue
+
+                sampled = True
+
             self.row_cols.append([row, col])
 
     @staticmethod
@@ -73,7 +93,7 @@ class ImageDataset(Dataset):
 
         # How to handle NaN rdn? -> Fill with chunk median.
         rdn = rdn[row:row+self.chunksize, col:col+self.chunksize, :].copy()
-        rdn[bad_rows, bad_cols, :] = np.nanmedian(rdn, axis=(0, 1))
+        # rdn[bad_rows, bad_cols, :] = np.nanmedian(rdn, axis=(0, 1))
 
         rdn = np.moveaxis(
             rdn,
