@@ -108,7 +108,7 @@ class Trainer:
 
         opt_encoder.zero_grad()
         loss_enc.backward()
-        torch.nn.utils.clip_grad_norm_(encoder.parameters(), 1.0)
+        # torch.nn.utils.clip_grad_norm_(encoder.parameters(), 1.0)
         opt_encoder.step()
 
         return (
@@ -220,7 +220,7 @@ def train(
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=batch,
-        shuffle=False
+        shuffle=True
     )
 
     test_dataset = ImageDataset(
@@ -233,7 +233,7 @@ def train(
     test_dataloader = DataLoader(
         test_dataset,
         batch_size=batch,
-        shuffle=False
+        shuffle=True
     )
 
     # Define wandb
