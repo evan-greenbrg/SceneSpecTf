@@ -16,7 +16,7 @@ class ImageDataset(Dataset):
                  nchunks: int, chunksize: int, nbins: int, dtype=np.float32):
         self.chunksize = chunksize
         self.nbins = nbins
-        self.index= [i for i in range(len(sp_paths) * nchunks)]
+        self.index = [i for i in range(len(sp_paths) * nchunks)]
         self.dtype = dtype
 
         self.sp_paths, self.atm_paths = [], []
@@ -25,7 +25,8 @@ class ImageDataset(Dataset):
             self.atm_paths += [atm_path for i in range(nchunks)]
 
         self.row_cols = []
-        for atm_path in self.atm_paths:
+        bad_idx = []
+        for path_i, atm_path in enumerate(self.atm_paths):
             atm = envi.open(envi_header(atm_path))
             h2o_idx = [
                 i for i, n in enumerate(atm.metadata['band names']) 
@@ -57,6 +58,17 @@ class ImageDataset(Dataset):
 
             if iters < 10:
                 self.row_cols.append([row, col])
+            else:
+                bad_idx.append(path_i)
+
+        remove = lambda val_list, bad_idx: [
+            v for i, v in enumerate(val_list)
+            if i not in bad_idx
+        ]
+        self.index = remove(self.index, bad_idx)
+        self.sp_paths = remove(self.sp_paths, bad_idx)
+        self.atm_paths = remove(self.atm_paths, bad_idx)
+
 
     @staticmethod
     def calc_histogram(data, nbins, nodata=-9999.):
