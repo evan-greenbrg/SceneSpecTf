@@ -59,8 +59,6 @@ class ImageDataset(Dataset):
         ][0]
         atm = atm.open_memmap(interleave='bip')
 
-        row = np.random.randint(atm.shape[0] - self.chunksize)
-        col = np.random.randint(atm.shape[1] - self.chunksize)
         row, col = self.row_cols[idx]
 
         sample = atm[row:row+self.chunksize, col:col+self.chunksize, :]
@@ -74,11 +72,11 @@ class ImageDataset(Dataset):
         )
 
         # How to handle NaN rdn? -> Fill with chunk median.
-        rdn = rdn[row:row+self.chunksize, col:col+self.chunksize, :]
-        # rdn[bad_rows, bad_cols, :] = np.nanmedian(rdn, axis=(0, 1))
+        rdn = rdn[row:row+self.chunksize, col:col+self.chunksize, :].copy()
+        rdn[bad_rows, bad_cols, :] = np.nanmedian(rdn, axis=(0, 1))
 
         rdn = np.moveaxis(
-            rdn[row:row+self.chunksize, col:col+self.chunksize, :],
+            rdn,
             -1, 0
         )
 
