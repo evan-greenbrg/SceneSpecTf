@@ -108,7 +108,7 @@ class Trainer:
 
         opt_encoder.zero_grad()
         loss_enc.backward()
-        # torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(encoder.parameters(), 1.0)
         opt_encoder.step()
 
         return (

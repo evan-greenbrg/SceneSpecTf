@@ -51,7 +51,11 @@ class ImageDataset(Dataset):
 
         atm_idx = [
             i for i in range(len(atm.metadata['band names'])) 
-            if atm.metadata['band names'][i] == 'H2OSTR'
+            if atm.metadata['band names'][i] == 'H2O (g cm-2)'
+        ][0]
+        spacecraft_idx = [
+            i for i in range(len(atm.metadata['band names'])) 
+            if atm.metadata['band names'][i] == 'Spacecraft Flag'
         ][0]
         atm = atm.open_memmap(interleave='bip')
 
@@ -59,7 +63,11 @@ class ImageDataset(Dataset):
         col = np.random.randint(atm.shape[1] - self.chunksize)
         row, col = self.row_cols[idx]
 
-        sample = atm[row:row+self.chunksize, col:col+self.chunksize, atm_idx]
+        sample = atm[row:row+self.chunksize, col:col+self.chunksize, :]
+        bad_rows, bad_cols = np.where(sample[..., spacecraft_idx])
+        sample = sample[..., atm_idx].copy()
+        sample[bad_rows, bad_cols] = np.nan
+
         latent = np.moveaxis(
             self.calc_histogram(sample, self.nbins),
             -1, 0
@@ -74,5 +82,3 @@ class ImageDataset(Dataset):
             'images': rdn.astype(self.dtype),
             'latent': latent.astype(self.dtype)
         }
-
-
